@@ -21,7 +21,7 @@ class User: NSObject {
 }
 
 protocol UserListViewControllerDelegate {
-    func selected(user: User, forRange: NSRange?)
+    func result(value: String?, withUser: User)
     func updateViewRect() -> CGRect
     func localUsers() -> [User]?
 }
@@ -32,6 +32,7 @@ class UserListViewController: UIViewController {
     var userArray: [User]?
     var delegate: UserListViewControllerDelegate?
     var searchTextRange: NSRange?
+    var sourceTextView: UITextView?
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -117,6 +118,32 @@ class UserListViewController: UIViewController {
         //TODO: Add API call for fetching user list and update the result in userArray
     }
     
+    func filterResultFor(textView: UITextView, range: NSRange, text: String) -> Bool {
+        sourceTextView = textView
+        let currentText = textView.text as NSString?
+        let textViewContent = currentText?.replacingCharacters(in: range, with: text)
+        
+        // Hide the tag list when no text in textView
+        // Ignore empty spaces and new line character
+        if textViewContent?.trimmingCharacters(in: .whitespacesAndNewlines).count ?? 0 <= 0 {
+            filterUser(withInputString: "", fromContent: "", withRange: range)
+            return true
+        }
+        
+        // Show tag list when @ is entered
+        if text == "@" {
+            view.isHidden = false
+        }
+        
+        // Search for search string
+        let textViewString = textViewContent as NSString?
+        let searchTextContent = textViewString?.substring(to: range.location + text.count)
+        let searchText = searchTextContent?.components(separatedBy: "@").last?.replacingOccurrences(of: "@", with: "")
+        filterUser(withInputString: searchText ?? "", fromContent: "\(textView.text ?? "")\(textViewContent ?? "")", withRange: range)
+        
+        return true
+    }
+    
     func filterUser(withInputString: String, fromContent: String, withRange: NSRange) {
         searchTextRange = withRange
         
@@ -135,6 +162,32 @@ class UserListViewController: UIViewController {
         } else {
             view.isHidden = true
         }
+    }
+    
+    func performActionForSelected(user: User, forRange: NSRange?) -> String? {
+        var result = sourceTextView?.text
+        
+        // source text is converted to NSString for some basic API availabilities
+        let currentText = sourceTextView?.text as NSString?
+        
+        // Get current cursor position
+        let cursorPosition = sourceTextView?.offset(from: sourceTextView?.beginningOfDocument ?? UITextPosition(), to: sourceTextView?.selectedTextRange?.start ?? UITextPosition())
+        
+        // Get string till the cursor current position where we need to enter the selected user name
+        let textViewContent = currentText?.substring(to: cursorPosition!)
+        
+        // Get the search string by seperating the above text using @ and take the last string where we need to enter the selected user name
+        if let searchString = textViewContent?.components(separatedBy: "@").last {
+            if searchString.isEmpty { // If no search string entered just append the selected name in source view
+                result = "\(sourceTextView?.text ?? "")\(user.userName ?? "No Name")"
+            } else if let searchStringRange = (textViewContent as NSString?)?.range(of: "@\(searchString)", options: .backwards) { // If any search string present then replace that string with selected name in source view
+                result = currentText?.replacingCharacters(in: searchStringRange, with: "@\(user.userName ?? "") ")
+            }
+        } else {
+            // Don't update the text view unless the above case satisfies
+        }
+        
+        return result
     }
     
     func isUserMatches(searchText: String) {
@@ -169,7 +222,10 @@ extension UserListViewController: UITableViewDelegate, UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        delegate?.selected(user: userArray![indexPath.row], forRange: searchTextRange)
+        // Sends result value appended with the existing content
+        let selectedUser = userArray![indexPath.row]
+        let result = performActionForSelected(user: selectedUser, forRange: searchTextRange)
+        delegate?.result(value: result, withUser: selectedUser)
         view.isHidden = true
     }
     

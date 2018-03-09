@@ -25,47 +25,12 @@ class ViewController: UIViewController {
     
     // MARK: - Custom methods
     
-    func addUserList() {
+    func initializeUserListSearch() {
         if userListViewController == nil {
             userListViewController = UserListViewController()
             userListViewController?.addUserListView(inViewController: self, withDelegate: self)
         } else {
             // Already added
-        }
-    }
-    
-    func removeUserList() {
-        userListViewController?.view.isHidden = true
-    }
-    
-    func showUserList() {
-        if let _ = userListViewController {
-            userListViewController?.view.isHidden = false
-        } else {
-            addUserList()
-        }
-    }
-    
-    func performActionForSelected(user: User, forRange: NSRange?) {
-        // source text is converted to NSString for some basic API availabilities
-        let currentText = messageTextView.text as NSString?
-        
-        // Get current cursor position
-        let cursorPosition = messageTextView.offset(from: messageTextView.beginningOfDocument, to: (messageTextView.selectedTextRange?.start)!)
-        
-        // Get string till the cursor current position where we need to enter the selected user name
-        let textViewContent = currentText?.substring(to: cursorPosition)
-        
-        // Get the search string by seperating the above text using @ and take the last string where we need to enter the selected user name
-        if let searchString = textViewContent?.components(separatedBy: "@").last {
-            if searchString.isEmpty { // If no search string entered just append the selected name in source view
-                messageTextView.text = "\(messageTextView.text ?? "")\(user.userName ?? "No Name")"
-            } else if let searchStringRange = (textViewContent as NSString?)?.range(of: "@\(searchString)", options: .backwards) { // If any search string present then replace that string with selected name in source view
-                let newString = currentText?.replacingCharacters(in: searchStringRange, with: "@\(user.userName ?? "") ")
-                messageTextView.text = newString
-            }
-        } else {
-            // Don't update the text view unless the above case satisfies
         }
     }
     
@@ -93,8 +58,8 @@ class ViewController: UIViewController {
 
 extension ViewController: UserListViewControllerDelegate {
     
-    func selected(user: User, forRange: NSRange?) {
-        performActionForSelected(user: user, forRange: forRange)
+    func result(value: String?, withUser: User) {
+        messageTextView.text = value
     }
     
     func updateViewRect() -> CGRect {
@@ -118,32 +83,14 @@ extension ViewController: UserListViewControllerDelegate {
 extension ViewController: UITextViewDelegate {
     
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-        let currentText = textView.text as NSString?
-        let textViewContent = currentText?.replacingCharacters(in: range, with: text)
-        
-        // Hide the tag list when no text in textView
-        // Ignore empty spaces and new line character
-        if textViewContent?.trimmingCharacters(in: .whitespacesAndNewlines).count ?? 0 <= 0 {
-            userListViewController?.filterUser(withInputString: "", fromContent: "", withRange: range)
-            return true
-        }
-        
         // Show tag list when @ is entered
         if textView == messageTextView {
             if text == "@" {
-                showUserList()
+                initializeUserListSearch()
             }
         }
         
-        // Search for search string
-        if userListViewController != nil {
-            let textViewString = textViewContent as NSString?
-            let searchTextContent = textViewString?.substring(to: range.location + text.count)
-            let searchText = searchTextContent?.components(separatedBy: "@").last?.replacingOccurrences(of: "@", with: "")
-            userListViewController?.filterUser(withInputString: searchText ?? "", fromContent: "\(textView.text ?? "")\(textViewContent ?? "")", withRange: range)
-        }
-        
-        return true
+        return userListViewController?.filterResultFor(textView: textView, range: range, text: text) ?? true
     }
     
 }
